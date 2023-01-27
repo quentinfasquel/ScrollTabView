@@ -13,8 +13,6 @@ public protocol ScrollTabItem: Identifiable, Equatable {
     var systemImage: String { get }
 }
 
-
-
 public struct ScrollTabView<TabItem: ScrollTabItem>: View {
 
     // MARK: Public Properties
@@ -72,46 +70,35 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
                 }
                 .scrollWillBeginDragging {
                     isDragging = true
+                } willEndDragging: { velocity, contentOffset in
+                    if velocity.x != 0 {
+                        let index = indexOfItem(at: contentOffset)
+                        contentOffset.x = scrollOffset(index: index)
+                    }
                 } didEndDragging: { decelerate in
                     isDragging = false
                     isDecelerating = decelerate
                     if !decelerate {
-                        snapToSelection(proxy: proxy, animated: true)
+                        snapToSelection(proxy: proxy)
                     }
                 } didEndDecelerating: {
                     isDecelerating = false
-                    // Disable animation when snapping after decelerating,
-                    // to avoid a flicking when dragging again quickly
-                    snapToSelection(proxy: proxy, animated: false)
                 }
                 .coordinateSpace(name: scrollSpaceName)
                 .overlay(alignment: .bottom) {
                     scrollIndicator(selectedItemWidth, viewSize: geometry.size)
                         .animation(.spring(), value: selectedItemWidth)
-//                        .animation(.spring(), value: selectedItem)
                 }
             }
             .onAppear {
-                // Autoselect first item
-                selectedItem = items.first
+                if selectedItem == nil {
+                    // Autoselect first item
+                    selectedItem = items.first
+                }
                 viewSize = geometry.size
             }
-            .onChange(of: contentOffset) { newValue in
-                guard contentOffset.x > 0 && contentOffset.x < contentSize.width - viewSize.width else {
-                    // Avoid updating when out of bounds
-                    return
-                }
-
-                let scrollWidth = contentSize.width - itemWidth
-                let x = contentOffset.x / (contentSize.width - viewSize.width)
-                for (index, item) in items.enumerated() {
-                    let minX = (scrollIndicatorPosition(index: index) - itemWidth * 0.5) / scrollWidth
-                    let maxX = (scrollIndicatorPosition(index: index) + itemWidth * 0.5) / scrollWidth
-                    if x > minX && x < maxX {
-                        setSelectedItem(item)
-                        break
-                    }
-                }
+            .onChange(of: contentOffset) { contentOffset in
+                setSelectedItem(item(at: contentOffset))
             }
         }
         .frame(height: tabHeight)
@@ -162,24 +149,39 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
     @ViewBuilder
     private func scrollIndicator(_ indicatorWidth: CGFloat, viewSize: CGSize) -> some View {
         let width = itemWidth
+        let minX: CGFloat = (width - indicatorWidth)
+        let maxX: CGFloat = (contentSize.width - viewSize.width)
         let x = contentOffset.x * (viewSize.width - width) / (contentSize.width - viewSize.width)
 
         Capsule()
             .frame(width: indicatorWidth, height: 3)
-            .position(x: x, y: viewSize.height - 1)
-            .offset(x: width * 0.5, y: 0)
+            .position(x: min(maxX, max(minX, x + width * 0.5)), y: viewSize.height - 1)
             .foregroundStyle(scrollIndicatorStyle)
     }
 
-    private func scrollIndicatorPosition(index: Int) -> CGFloat {
-        return CGFloat(index) * itemWidth + CGFloat(index - 1) * CGFloat(0)
+    private func itemPosition(index: Int) -> CGFloat {
+        return CGFloat(index) * itemWidth + CGFloat(index - 1) * itemSpacing
+    }
+
+    private func scrollOffset(index: Int) -> CGFloat {
+        let x = itemPosition(index: index) / (contentSize.width - itemWidth)
+        return x * (contentSize.width - viewSize.width)
+    }
+
+    private func indexOfItem(at position: CGPoint) -> Int {
+        let x = min(1, max(0, position.x / (contentSize.width - viewSize.width)))
+        return min(items.count - 1, Int(x * CGFloat(items.count)))
+    }
+
+    private func item(at position: CGPoint) -> TabItem {
+        return items[indexOfItem(at: position)]
     }
 
     // MARK: - Handling Selection
 
     private func didSelectTabItem(_ item: TabItem, proxy: ScrollViewProxy) {
         if let index = setSelectedItem(item, feedback: false) {
-            scrollTo(item, proxy: proxy, index: index, animated: true)
+            scrollTo(item, proxy: proxy, index: index)
             feedbackGenerator.selectionChanged()
         }
     }
@@ -194,16 +196,16 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
         return index
     }
 
-    private func scrollTo(_ item: TabItem, proxy: ScrollViewProxy, index: Int, animated: Bool) {
-        let x = scrollIndicatorPosition(index: index) / (contentSize.width - itemWidth)
-        withAnimation(animated ? .spring() : .linear) {
+    private func scrollTo(_ item: TabItem, proxy: ScrollViewProxy, index: Int) {
+        let x = itemPosition(index: index) / (contentSize.width - itemWidth)
+        withAnimation(.spring()) {
             proxy.scrollTo(item.id, anchor: UnitPoint(x: x, y: 0))
         }
     }
 
-    private func snapToSelection(proxy: ScrollViewProxy, animated: Bool) {
+    private func snapToSelection(proxy: ScrollViewProxy) {
         if !isDragging, let item = selectedItem, let index = items.firstIndex(of: item) {
-            scrollTo(item, proxy: proxy, index: index, animated: animated)
+            scrollTo(item, proxy: proxy, index: index)
         }
     }
 }
