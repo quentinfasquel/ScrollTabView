@@ -12,7 +12,7 @@ let package = Package(
             targets: ["ScrollTabView"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/quentinfasquel/ScrollViewEvents", from: "0.0.1"),
+        .package(url: "https://github.com/quentinfasquel/ScrollViewEvents", from: "0.0.2"),
     ],
     targets: [
         .target(

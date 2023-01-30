@@ -17,11 +17,11 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
 
     // MARK: Public Properties
 
-    public var items: [TabItem]
+    @Binding public var items: [TabItem]
     @Binding public var selectedItem: TabItem?
 
-    public init(items: [TabItem], selectedItem: Binding<TabItem?>) {
-        self.items = items
+    public init(items: Binding<[TabItem]>, selectedItem: Binding<TabItem?>) {
+        self._items = items
         self._selectedItem = selectedItem
     }
 
@@ -88,6 +88,7 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
                 .overlay(alignment: .bottom) {
                     scrollIndicator(selectedItemWidth, viewSize: geometry.size)
                         .animation(.spring(), value: selectedItemWidth)
+                        .animation(.spring(), value: selectedItem)
                 }
             }
             .onAppear {
@@ -95,10 +96,14 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
                     // Autoselect first item
                     selectedItem = items.first
                 }
-                viewSize = geometry.size
+            }
+            .onChange(of: contentSize) { _ in
+                viewSize = geometry.frame(in: .local).size
             }
             .onChange(of: contentOffset) { contentOffset in
-                setSelectedItem(item(at: contentOffset))
+                if contentSize.width > viewSize.width, let item = item(at: contentOffset) {
+                    setSelectedItem(item)
+                }
             }
         }
         .frame(height: tabHeight)
@@ -146,26 +151,35 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
 
     // MARK: - Scroll Indicator
 
+    private var selectedIndex: Int {
+        if let item = selectedItem { return items.firstIndex(of: item) ?? 0 } else { return 0 }
+    }
+
     @ViewBuilder
     private func scrollIndicator(_ indicatorWidth: CGFloat, viewSize: CGSize) -> some View {
+        let intrinsinctWidth = itemWidth * CGFloat(items.count) + itemSpacing * CGFloat(items.count - 1)
         let width = itemWidth
-        let minX: CGFloat = (width - indicatorWidth)
-        let maxX: CGFloat = (contentSize.width - viewSize.width)
-        let x = contentOffset.x * (viewSize.width - width) / (contentSize.width - viewSize.width)
+        let minWidth = min(intrinsinctWidth, viewSize.width)
+        let maxWidth = max(intrinsinctWidth, viewSize.width)
+        let dx = width * 0.5 + max(0, (viewSize.width - intrinsinctWidth) * 0.5)
+        let x: CGFloat = {
+            if contentSize.width > viewSize.width {
+                return contentOffset.x * (viewSize.width - width) / (maxWidth - minWidth) + dx
+            } else {
+                return itemPosition(for: selectedIndex) + dx
+            }
+        }()
 
         Capsule()
             .frame(width: indicatorWidth, height: 3)
-            .position(x: min(maxX, max(minX, x + width * 0.5)), y: viewSize.height - 1)
+            .position(x: x, y: viewSize.height - 1)
             .foregroundStyle(scrollIndicatorStyle)
     }
 
-    private func itemPosition(index: Int) -> CGFloat {
-        return CGFloat(index) * itemWidth + CGFloat(index - 1) * itemSpacing
-    }
 
     private func scrollOffset(index: Int) -> CGFloat {
-        let x = itemPosition(index: index) / (contentSize.width - itemWidth)
-        return x * (contentSize.width - viewSize.width)
+        let x = itemPosition(for: index) / (contentSize.width - itemWidth)
+        return x * max(0, contentSize.width - viewSize.width)
     }
 
     private func indexOfItem(at position: CGPoint) -> Int {
@@ -173,7 +187,12 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
         return min(items.count - 1, Int(x * CGFloat(items.count)))
     }
 
-    private func item(at position: CGPoint) -> TabItem {
+    private func itemPosition(for index: Int) -> CGFloat {
+        return CGFloat(index) * itemWidth + CGFloat(index) * itemSpacing
+    }
+
+    private func item(at position: CGPoint) -> TabItem? {
+        guard items.count > 0 else { return nil }
         return items[indexOfItem(at: position)]
     }
 
@@ -197,7 +216,7 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
     }
 
     private func scrollTo(_ item: TabItem, proxy: ScrollViewProxy, index: Int) {
-        let x = itemPosition(index: index) / (contentSize.width - itemWidth)
+        let x = itemPosition(for: index) / (contentSize.width - itemWidth)
         withAnimation(.spring()) {
             proxy.scrollTo(item.id, anchor: UnitPoint(x: x, y: 0))
         }

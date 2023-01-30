@@ -29,9 +29,9 @@ struct ScrollViewOffsetModifier: ViewModifier {
                     let contentOffset = CGPoint(x: -frame.minX, y: frame.minY)
                     Color.clear
                         .preference(key: ScrollViewOffsetPreferenceKey.self, value: contentOffset)
-                        .onAppear {
-                            self.contentSize = geometryProxy.frame(in: .local).size
-                        }
+                        .onChange(of: geometryProxy.frame(in: .local).size, perform: { newValue in
+                            self.contentSize = newValue
+                        })
                 }
             }
             .onPreferenceChange(ScrollViewOffsetPreferenceKey.self) { contentOffset in

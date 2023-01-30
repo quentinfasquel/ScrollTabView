@@ -5,8 +5,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/quentinfasquel/ScrollViewEvents",
       "state" : {
-        "revision" : "42c182d5544ec9070a004edad50bb6fa56d8b51b",
-        "version" : "0.0.1"
+        "revision" : "71abcb2754431a63c0213a139d1e6ed814acee21",
+        "version" : "0.0.2"
       }
     }
   ],
