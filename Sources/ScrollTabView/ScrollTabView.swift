@@ -19,10 +19,16 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
 
     @Binding public var items: [TabItem]
     @Binding public var selectedItem: TabItem?
+    var onSelectItem: ((TabItem) -> Void)?
 
-    public init(items: Binding<[TabItem]>, selectedItem: Binding<TabItem?>) {
+    public init(
+        items: Binding<[TabItem]>,
+        selectedItem: Binding<TabItem?>,
+        onSelectItem: ((TabItem) -> Void)? = nil
+    ) {
         self._items = items
         self._selectedItem = selectedItem
+        self.onSelectItem = onSelectItem
     }
 
     // MARK: Private Properties
@@ -211,6 +217,7 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
     }
 
     private func didSelectTabItem(_ item: TabItem, proxy: ScrollViewProxy) {
+        onSelectItem?(item)
         if let index = setFocusedItem(item, feedback: false) {
             scrollTo(item, proxy: proxy, index: index)
             feedbackGenerator.selectionChanged()
