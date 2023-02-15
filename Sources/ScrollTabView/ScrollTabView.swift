@@ -134,7 +134,7 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
         let isSelected = focusedItem == item
 
         VStack(alignment: .center, spacing: 0) {
-            Image(systemName: item.systemImage)
+            (Image(safeSystemName: item.systemImage) ?? Image(systemName: "circle.fill"))
                 .font(.system(size: 24, weight: .semibold))
                 .frame(height: 44)
             Text(item.title)
@@ -264,5 +264,12 @@ extension EnvironmentValues {
     var scrollIndicatorStyle: AnyShapeStyle {
         get { self[ScrollIndicatorStyleEnvironmentKey.self] }
         set { self[ScrollIndicatorStyleEnvironmentKey.self] = newValue }
+    }
+}
+
+extension SwiftUI.Image {
+    init?(safeSystemName: String) {
+        guard nil != UIImage(systemName: safeSystemName) else { return nil }
+        self.init(systemName: safeSystemName)
     }
 }
