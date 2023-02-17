@@ -13,25 +13,40 @@ public protocol ScrollTabItem: Identifiable, Equatable {
     var systemImage: String { get }
 }
 
-public struct ScrollTabView<TabItem: ScrollTabItem>: View {
+public struct ScrollTabView<TabItem: ScrollTabItem, TabItemView: View>: View {
 
     // MARK: Public Properties
 
     @Binding public var items: [TabItem]
     @Binding public var selectedItem: TabItem?
-    var onSelectItem: ((TabItem) -> Void)?
+
+    public init(
+        items: Binding<[TabItem]>,
+        selectedItem: Binding<TabItem?>,
+        onSelectItem: ((TabItem) -> Void)? = nil,
+        itemViewBuilder: @escaping (TabItem) -> TabItemView
+    ) {
+        self._items = items
+        self._selectedItem = selectedItem
+        self.onSelectItem = onSelectItem
+        self.itemViewBuilder = itemViewBuilder
+    }
 
     public init(
         items: Binding<[TabItem]>,
         selectedItem: Binding<TabItem?>,
         onSelectItem: ((TabItem) -> Void)? = nil
-    ) {
+    ) where TabItemView == ScrollTabItemView<TabItem> {
         self._items = items
         self._selectedItem = selectedItem
         self.onSelectItem = onSelectItem
+        self.itemViewBuilder = TabItemView.init(item:)
     }
 
     // MARK: Private Properties
+
+    private var onSelectItem: ((TabItem) -> Void)?
+    private var itemViewBuilder: (TabItem) -> TabItemView
 
     @State private var contentOffset: CGPoint = .zero
     @State private var contentSize: CGSize = .zero
@@ -118,14 +133,13 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
                     updateSelection()
                 }
             }
-        }
-        .frame(height: tabHeight)
-        // Add a seperator line
-        .background(alignment: .bottom) {
-            Rectangle()
-                .frame(height: 1)
-                .opacity(0.25)
-                .foregroundStyle(.foreground)
+            // Add a seperator line
+            .background(alignment: .bottom) {
+                Rectangle()
+                    .frame(height: 1)
+                    .opacity(0.25)
+                    .foregroundStyle(.foreground)
+            }
         }
     }
 
@@ -133,33 +147,25 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
     private func tabItemView(_ item: TabItem) -> some View {
         let isSelected = focusedItem == item
 
-        VStack(alignment: .center, spacing: 0) {
-            (Image(safeSystemName: item.systemImage) ?? Image(systemName: "circle.fill"))
-                .font(.system(size: 24, weight: .semibold))
-                .frame(height: 44)
-            Text(item.title)
-                .font(.system(size: 11, weight: .semibold))
-                .lineLimit(1)
-                .multilineTextAlignment(.center)
-        }
-        .opacity(isSelected ? 1 : 0.5)
-        .animation(.linear, value: isSelected)
-        .overlay(alignment: .bottom) {
-            GeometryReader { itemProxy in
-                Color.clear
-                    .onChange(of: focusedItem) { newValue in
-                        if newValue == item {
-                            focusedItemWidth = itemProxy.size.width
+        itemViewBuilder(item)
+            .opacity(isSelected ? 1 : 0.5)
+            .animation(.linear, value: isSelected)
+            .overlay(alignment: .bottom) {
+                GeometryReader { itemProxy in
+                    Color.clear
+                        .onChange(of: focusedItem) { newValue in
+                            if newValue == item {
+                                focusedItemWidth = itemProxy.size.width
+                            }
                         }
-                    }
-                    .onAppear {
-                        if isSelected {
-                            focusedItemWidth = itemProxy.size.width
+                        .onAppear {
+                            if isSelected {
+                                focusedItemWidth = itemProxy.size.width
+                            }
                         }
-                    }
+                }
             }
-        }
-        .frame(width: itemWidth)
+            .frame(width: itemWidth)
     }
 
     // MARK: - Scroll Indicator
@@ -185,7 +191,7 @@ public struct ScrollTabView<TabItem: ScrollTabItem>: View {
 
         Capsule()
             .frame(width: indicatorWidth, height: 3)
-            .position(x: x, y: viewSize.height - 1)
+            .offset(x: x - viewSize.width * 0.5)
             .foregroundStyle(scrollIndicatorStyle)
     }
 
@@ -271,5 +277,23 @@ extension SwiftUI.Image {
     init?(safeSystemName: String) {
         guard nil != UIImage(systemName: safeSystemName) else { return nil }
         self.init(systemName: safeSystemName)
+    }
+}
+
+public struct ScrollTabItemView<TabItem: ScrollTabItem>: View {
+    public var item: TabItem
+
+    public var body: some View {
+        VStack(alignment: .center, spacing: 0) {
+            (Image(safeSystemName: item.systemImage) ?? Image(systemName: "circle.fill"))
+                .font(.system(size: 24, weight: .semibold))
+                .frame(height: 44)
+            Text(item.title)
+                .font(.system(size: 11, weight: .semibold))
+                .lineLimit(1)
+                .multilineTextAlignment(.center)
+            Spacer(minLength: 0)
+        }
+        .frame(height: 64) // default menu height
     }
 }
