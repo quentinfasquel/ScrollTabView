@@ -21,6 +21,10 @@ public struct ScrollTabView<TabItem: ScrollTabItem, TabItemView: View>: View {
     @Binding public var items: [TabItem]
     @Binding public var selectedItem: TabItem?
 
+    // MARK: Private Properties
+
+    @State private var hasAppeared: Bool = false
+
     public init(
         alignment: HorizontalAlignment = .center,
         items: Binding<[TabItem]>,
@@ -123,18 +127,22 @@ public struct ScrollTabView<TabItem: ScrollTabItem, TabItemView: View>: View {
                 }
                 .coordinateSpace(name: scrollSpaceName)
                 .overlay(alignment: .bottom) {
-                    scrollIndicator(focusedItemWidth, viewSize: geometry.size)
-                        .animation(.spring(), value: focusedItemWidth)
-                        .animation(.spring(), value: focusedItem)
+                    if hasAppeared {
+                        scrollIndicator(focusedItemWidth, viewSize: geometry.size)
+                            .animation(.spring(), value: focusedItemWidth)
+                            .animation(.spring(), value: focusedItem)
+                    } else {
+                        scrollIndicator(focusedItemWidth, viewSize: geometry.size)
+                    }
+                }
+                .onChange(of: selectedItem) { newValue in
+                    if hasAppeared {
+                        updateFocusSelection(proxy)
+                    }
                 }
             }
-            .onAppear {
-                if focusedItem == nil {
-                    // Autoselect first item
-                    focusedItem = items.first
-                    updateSelection()
-                }
-            }
+            .onAppear { hasAppeared = true }
+            .onDisappear { hasAppeared = false }
             .onChange(of: contentSize) { _ in
                 viewSize = geometry.frame(in: .local).size
             }
@@ -245,6 +253,13 @@ public struct ScrollTabView<TabItem: ScrollTabItem, TabItemView: View>: View {
         }
     }
 
+    private func updateFocusSelection(_ proxy: ScrollViewProxy) {
+        if focusedItem != selectedItem, let selectedItem, let index = items.firstIndex(of: selectedItem) {
+            focusedItem = selectedItem
+            scrollTo(selectedItem, proxy: proxy, index: index, animated: false)
+        }
+    }
+
     private func didSelectTabItem(_ item: TabItem, proxy: ScrollViewProxy) {
         onSelectItem?(item)
         if let index = setFocusedItem(item, feedback: false) {
@@ -263,9 +278,13 @@ public struct ScrollTabView<TabItem: ScrollTabItem, TabItemView: View>: View {
         return index
     }
 
-    private func scrollTo(_ item: TabItem, proxy: ScrollViewProxy, index: Int) {
+    private func scrollTo(_ item: TabItem, proxy: ScrollViewProxy, index: Int, animated: Bool = true) {
         let x = itemPosition(for: index) / (contentSize.width - itemWidth)
-        withAnimation(.spring()) {
+        if animated {
+            withAnimation(.spring()) {
+                proxy.scrollTo(item.id, anchor: UnitPoint(x: x, y: 0))
+            }
+        } else {
             proxy.scrollTo(item.id, anchor: UnitPoint(x: x, y: 0))
         }
         updateSelection()
