@@ -17,15 +17,18 @@ public struct ScrollTabView<TabItem: ScrollTabItem, TabItemView: View>: View {
 
     // MARK: Public Properties
 
+    let alignment: HorizontalAlignment
     @Binding public var items: [TabItem]
     @Binding public var selectedItem: TabItem?
 
     public init(
+        alignment: HorizontalAlignment = .center,
         items: Binding<[TabItem]>,
         selectedItem: Binding<TabItem?>,
         onSelectItem: ((TabItem) -> Void)? = nil,
         itemViewBuilder: @escaping (TabItem) -> TabItemView
     ) {
+        self.alignment = alignment
         self._items = items
         self._selectedItem = selectedItem
         self.onSelectItem = onSelectItem
@@ -33,10 +36,12 @@ public struct ScrollTabView<TabItem: ScrollTabItem, TabItemView: View>: View {
     }
 
     public init(
+        alignment: HorizontalAlignment = .center,
         items: Binding<[TabItem]>,
         selectedItem: Binding<TabItem?>,
         onSelectItem: ((TabItem) -> Void)? = nil
     ) where TabItemView == ScrollTabItemView<TabItem> {
+        self.alignment = alignment
         self._items = items
         self._selectedItem = selectedItem
         self.onSelectItem = onSelectItem
@@ -66,6 +71,10 @@ public struct ScrollTabView<TabItem: ScrollTabItem, TabItemView: View>: View {
     private let tabHeight: CGFloat = 64
     private let scrollSpaceName = "_ScrollTabView_"
 
+    private var showSpacers: Bool { contentSize.width <= viewSize.width }
+    private var showLeadingSpacer: Bool { showSpacers && alignment == .trailing }
+    private var showTrailingSpacer: Bool { showSpacers && alignment == .leading }
+
     // MARK: -
 
     public var body: some View {
@@ -73,6 +82,9 @@ public struct ScrollTabView<TabItem: ScrollTabItem, TabItemView: View>: View {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(alignment: .center, spacing: itemSpacing) {
+                        if showLeadingSpacer {
+                            Spacer()
+                        }
                         ForEach(items) { item in
                             Button {
                                 didSelectTabItem(item, proxy: proxy)
@@ -82,6 +94,9 @@ public struct ScrollTabView<TabItem: ScrollTabItem, TabItemView: View>: View {
                             .buttonStyle(PlainButtonStyle())
                             .foregroundStyle(.foreground)
                             .tag(item.id)
+                        }
+                        if showTrailingSpacer {
+                            Spacer()
                         }
                     }
                     .frame(minWidth: geometry.size.width)
@@ -180,12 +195,20 @@ public struct ScrollTabView<TabItem: ScrollTabItem, TabItemView: View>: View {
         let width = itemWidth
         let minWidth = min(intrinsinctWidth, viewSize.width)
         let maxWidth = max(intrinsinctWidth, viewSize.width)
-        let dx = width * 0.5 + max(0, (viewSize.width - intrinsinctWidth) * 0.5)
+        let spacingWidth = max(0, viewSize.width - intrinsinctWidth)
+        let dx = width * 0.5 + spacingWidth * 0.5
         let x: CGFloat = {
             if contentSize.width > viewSize.width {
                 return contentOffset.x * (viewSize.width - width) / (maxWidth - minWidth) + dx
             } else {
-                return itemPosition(for: focusedIndex) + dx
+                switch alignment {
+                case .leading:
+                    return itemPosition(for: focusedIndex) + width * 0.5
+                case .trailing:
+                    return itemPosition(for: focusedIndex) + width * 0.5 + spacingWidth
+                default: // center
+                    return itemPosition(for: focusedIndex) + width * 0.5 + spacingWidth * 0.5
+                }
             }
         }()
 
